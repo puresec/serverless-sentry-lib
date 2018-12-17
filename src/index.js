@@ -274,7 +274,7 @@ class RavenLambdaWrapper {
 	 * @param {Function} handler - Original Lambda function handler
 	 * @return {Function} - Wrapped Lambda function handler with Sentry instrumentation
 	 */
-	static handler(pluginConfig, handler) {
+	static handler(pluginConfig, handler, sentryDsnPromise) {
 		if (_.isObject(pluginConfig) &&
 			_.isFunction(pluginConfig.captureException) &&
 			_.isFunction(pluginConfig.captureMessage)) {
@@ -299,9 +299,11 @@ class RavenLambdaWrapper {
 
 		// Create a new handler function wrapping the original one and hooking
 		// into all callbacks
-		return (event, context, callback) => {
+		return async (event, context, callback) => {
 
 			// Install raven (if that didn't happen already during a previous Lambda invocation)
+			await sentryDsnPromise;
+
 			if (process.env.SENTRY_DSN && !ravenInstalled) {
 				installRaven(pluginConfig);
 			}
