@@ -297,14 +297,14 @@ class RavenLambdaWrapper {
 			pluginConfig.ravenClient = require("raven");
 		}
 
-		// Install raven (if that didn't happen already during a previous Lambda invocation)
-		if (process.env.SENTRY_DSN && !ravenInstalled) {
-			installRaven(pluginConfig);
-		}
-
 		// Create a new handler function wrapping the original one and hooking
 		// into all callbacks
 		return (event, context, callback) => {
+
+			// Install raven (if that didn't happen already during a previous Lambda invocation)
+			if (process.env.SENTRY_DSN && !ravenInstalled) {
+				installRaven(pluginConfig);
+			}
 
 			if (!ravenInstalled) {
 				// Directly invoke the original handler
