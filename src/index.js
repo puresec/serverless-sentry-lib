@@ -73,7 +73,7 @@ class _ {
  * @param {Object} pluginConfig - Plugin configuration. This is NOT optional!
  * @returns {undefined}
  */
-function installRaven(pluginConfig) {
+function installRaven(pluginConfig, dsn) {
 	const Raven = pluginConfig.ravenClient;
 	if (!Raven) {
 		console.error("Raven client not found.");
@@ -96,7 +96,7 @@ function installRaven(pluginConfig) {
 	// allows us to control all aspects of Raven in a single location -
 	// our plugin configuration.
 	Raven.config(
-		process.env.SENTRY_DSN,
+		dsn,
 		_.extend({
 			release: process.env.SENTRY_RELEASE,
 			environment: isLocalEnv ? "Local" : process.env.SENTRY_ENVIRONMENT,
@@ -302,13 +302,11 @@ class RavenLambdaWrapper {
 		return async (event, context, callback) => {
 
 			// if promise to DSN is provided, wait for it to resolve
-			if (sentryDsnPromise) {
-				await sentryDsnPromise;
-			}
+			let dsn = await sentryDsnPromise || process.env.SENTRY_DSN;
 
 			// Install raven (if that didn't happen already during a previous Lambda invocation)
-			if (process.env.SENTRY_DSN && !ravenInstalled) {
-				installRaven(pluginConfig);
+			if (dsn && !ravenInstalled) {
+				installRaven(pluginConfig, dsn);
 			}
 
 			if (!ravenInstalled) {
