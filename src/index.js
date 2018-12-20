@@ -302,7 +302,7 @@ class RavenLambdaWrapper {
 		return async (event, context, callback) => {
 
 			// if promise to DSN is provided, wait for it to resolve
-			let dsn = await sentryDsnPromise || process.env.SENTRY_DSN;
+			let dsn = process.env.SENTRY_DSN || await sentryDsnPromise;
 
 			// Install raven (if that didn't happen already during a previous Lambda invocation)
 			if (dsn && !ravenInstalled) {
