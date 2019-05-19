@@ -85,12 +85,22 @@ function addFingerprint(opts, fingerprint) {
 function parseFingeprint(fingerprint) {
 	if (! Array.isArray(fingerprint)) {
 		console.log("Error, invalid plugin fingerprint, must be an Array", fingerprint);
+		return;
 	}
 	const newFingerprint = [];
 	const fnModule = process.env.SENTRY_MODULE || "";
 	fingerprint.forEach((issueGroup) => {
-		newFingerprint.push(issueGroup.replace("{{module}}", fnModule));
+		const newIssueGroup = issueGroup.replace("{{module}}", fnModule);
+		if (newIssueGroup) {
+			newFingerprint.push();
+		}
 	});
+
+	if (newFingerprint.length == 0) {
+		console.log("Error, new fingerprint resolved to be empty, original is", fingerprint, "fnModule is", fnModule);
+		return;
+	}
+	
 	debug("sentry plugin fingerprint", newFingerprint);
 	return newFingerprint;
 }
