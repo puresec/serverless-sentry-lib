@@ -511,6 +511,7 @@ class RavenLambdaWrapper {
 							}
 							if (ravenInstalled && err && pluginConfig.captureErrors) {
 								const Raven = pluginConfig.ravenClient;
+								debug("capturing exception with options", captureOptions);
 								return new Promise((resolve, reject) => Raven.captureException(err, captureOptions, () => {
 									reject(err);
 								}));
