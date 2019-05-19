@@ -499,6 +499,7 @@ class RavenLambdaWrapper {
 					const promise = handler(event, context, callback);
 					if (promise && _.isFunction(promise.then)) {
 						// don't forget to stop timers
+						debug("sentry wrapping async handler");
 						return promise
 						.then((...data) => {
 							clearTimers();
