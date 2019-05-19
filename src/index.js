@@ -368,6 +368,7 @@ class RavenLambdaWrapper {
 
 		const captureOptions = {};
 		if (pluginConfig.fingerprint) {
+			debug("parsing Sentry fingerprint");
 			const parsedFingerprint = parseFingeprint(pluginConfig.fingerprint);
 			if (parsedFingerprint) {
 				captureOptions.fingerprint = parsedFingerprint;
