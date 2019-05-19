@@ -92,7 +92,7 @@ function parseFingeprint(fingerprint) {
 	fingerprint.forEach((issueGroup) => {
 		const newIssueGroup = issueGroup.replace("{{module}}", fnModule);
 		if (newIssueGroup) {
-			newFingerprint.push();
+			newFingerprint.push(newIssueGroup);
 		}
 	});
 
