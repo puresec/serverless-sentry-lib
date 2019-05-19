@@ -66,7 +66,38 @@ class _ {
 	}
 }
 
+/**
+ * plugin debug function
+ */
+function debug(log) {
+	if (process.env.SENTRY_DEBUG) {
+		console.log(log);
+	}
+}
 
+function addFingerprint(opts, fingerprint) {
+	if (fingerprint) {
+		opts.fingerprint = fingerprint;
+	}
+}
+
+function parseFingeprint(fingerprint) {
+	if (! Array.isArray(fingerprint)) {
+		console.log("Error, invalid plugin fingerprint, must be an Array", fingerprint);
+	}
+	const newFingerprint = [];
+	const fnModule = process.env.SENTRY_MODULE || "";
+	fingerprint.forEach((issueGroup) => {
+		newFingerprint.push(issueGroup.replace("{{module}}", fnModule));
+	});
+	debug("sentry plugin fingerprint", newFingerprint);
+	return newFingerprint;
+}
+
+/**
+ * 
+ * @param {*} pluginConfig 
+ */
 /**
  * Install Raven/Sentry support
  *
@@ -86,7 +117,9 @@ function installRaven(pluginConfig) {
 		console.warn("Sentry disabled in local environment");
 		delete process.env.SENTRY_DSN; // otherwise raven will start reporting nonetheless
 
-		Raven.config().install();
+		Raven.config().install((err) => {
+			console.log("Fatal error has occured while installing raven", err.message, err.stack);
+		});
 
 		ravenInstalled = true;
 		return;
@@ -133,7 +166,7 @@ let memoryWatch, timeoutWarning, timeoutError;
  * @param {Object} lambdaContext
  * @param {Object} event
  */
-function installTimers(pluginConfig, lambdaContext, event) {
+function installTimers(pluginConfig, lambdaContext, event, fingerprint) {
 	const timeRemaining = lambdaContext.getRemainingTimeInMillis();
 	const memoryLimit = lambdaContext.memoryLimitInMB;
 
@@ -142,12 +175,12 @@ function installTimers(pluginConfig, lambdaContext, event) {
 		if (pluginConfig.printEventToStdout) {
 			console.log("Processing event for timeout warning:", event);
 		}
-		ravenInstalled && Raven.captureMessage("Function Execution Time Warning", {
+		ravenInstalled && Raven.captureMessage("Function Execution Time Warning", addFingerprint({
 			level: "warning",
 			extra: {
 				TimeRemainingInMsec: lambdaContext.getRemainingTimeInMillis()
 			}
-		}, cb);
+		}, fingerprint), cb);
 	}
 
 	function timeoutErrorFunc(cb) {
@@ -155,12 +188,12 @@ function installTimers(pluginConfig, lambdaContext, event) {
 		if (pluginConfig.printEventToStdout) {
 			console.log("Processing event for timeout error:", event);
 		}
-		ravenInstalled && Raven.captureMessage("Function Timed Out", {
+		ravenInstalled && Raven.captureMessage("Function Timed Out", addFingerprint({
 			level: "error",
 			extra: {
 				TimeRemainingInMsec: lambdaContext.getRemainingTimeInMillis()
 			}
-		}, cb);
+		}, fingerprint), cb);
 	}
 
 	function memoryWatchFunc(cb) {
@@ -171,13 +204,13 @@ function installTimers(pluginConfig, lambdaContext, event) {
 				console.log("Processing event for memory error:", event);
 			}
 			const Raven = pluginConfig.ravenClient;
-			ravenInstalled && Raven.captureMessage("Low Memory Warning", {
+			ravenInstalled && Raven.captureMessage("Low Memory Warning", addFingerprint({
 				level: "warning",
 				extra: {
 					MemoryLimitInMB: memoryLimit,
 					MemoryUsedInMB: Math.floor(used)
 				}
-			}, cb);
+			}, fingerprint), cb);
 
 			if (memoryWatch) {
 				clearTimeout(memoryWatch);
@@ -231,7 +264,7 @@ function clearTimers() {
  * @param {Function} cb - Callback function to wrap
  * @returns {Function}
  */
-function wrapCallback(pluginConfig, cb) {
+function wrapCallback(pluginConfig, cb, captureOptions) {
 	return (err, data) => {
 		// Stop watchdog timers
 		clearTimers();
@@ -239,7 +272,7 @@ function wrapCallback(pluginConfig, cb) {
 		// If an error was thrown we'll report it to Sentry
 		if (err && pluginConfig.captureErrors) {
 			const Raven = pluginConfig.ravenClient;
-			ravenInstalled && Raven.captureException(err, {}, () => {
+			ravenInstalled && Raven.captureException(err, captureOptions, () => {
 				cb(err, data);
 			});
 		}
@@ -287,6 +320,7 @@ class RavenLambdaWrapper {
 	 * @param {boolean} [pluginConfig.captureTimeoutErrors] - monitor execution timeouts errors (defaults to `true`)
  	 * @param {boolean} [pluginConfig.printEventToStdout] - print the event with console log (defaults to `false`)
 	 * @param {boolean} [pluginConfig.filterEventsFields] - filter out list of fields from the event data (defaults to ''.Example for not empty:'body,headers')
+	 * @param {boolean} [pluginConfig.fingerprint] - fingerprint template for issues
 	 * @param {Function} handler - Original Lambda function handler
 	 * @return {Function} - Wrapped Lambda function handler with Sentry instrumentation
 	 */
@@ -316,9 +350,18 @@ class RavenLambdaWrapper {
 			pluginConfig.ravenClient = require("raven");
 		}
 
+		const captureOptions = {};
+		if (pluginConfig.fingerprint) {
+			const parsedFingerprint = parseFingeprint(pluginConfig.fingerprint);
+			if (parsedFingerprint) {
+				captureOptions.fingerprint = parsedFingerprint;
+				pluginConfig.fingerprint = parsedFingerprint;
+			}
+		}
+
 		// Install raven (if that didn't happen already during a previous Lambda invocation)
 		if (process.env.SENTRY_DSN && !ravenInstalled) {
-			console.log(pluginConfig);
+			debug("installing raven plugin with config", pluginConfig);
 			installRaven(pluginConfig);
 		}
 
@@ -338,13 +381,13 @@ class RavenLambdaWrapper {
 				callback: callback,
 			};
 			context.done = _.isFunction(originalCallbacks.done) ?
-				wrapCallback(pluginConfig, originalCallbacks.done) : originalCallbacks.done;
+				wrapCallback(pluginConfig, originalCallbacks.done, captureOptions) : originalCallbacks.done;
 			context.fail = _.isFunction(originalCallbacks.fail) ?
-				wrapCallback(pluginConfig, originalCallbacks.fail) : originalCallbacks.fail;
+				wrapCallback(pluginConfig, originalCallbacks.fail, captureOptions) : originalCallbacks.fail;
 			context.succeed = _.isFunction(originalCallbacks.succeed) ?
-				wrapCallback(pluginConfig, (err, result) => originalCallbacks.succeed(result)).bind(null, null) : originalCallbacks.succeed;
+				wrapCallback(pluginConfig, (err, result) => originalCallbacks.succeed(result), captureOptions).bind(null, null) : originalCallbacks.succeed;
 			callback = originalCallbacks.callback ?
-				wrapCallback(pluginConfig, originalCallbacks.callback) : originalCallbacks.callback;
+				wrapCallback(pluginConfig, originalCallbacks.callback, captureOptions) : originalCallbacks.callback;
 
 			// filter out un-needed fields from event
 			const filterEventsFieldsArray = pluginConfig.filterEventsFields.split(",");
@@ -363,6 +406,10 @@ class RavenLambdaWrapper {
 				},
 				tags: {}
 			};
+
+			if (pluginConfig.fingerprint) {
+				ravenContext.fingerprint = pluginConfig.fingerprint;
+			}
 
 			// Depending on the endpoint type the identity information can be at
 			// event.requestContext.identity (AWS_PROXY) or at context.identity (AWS)
@@ -397,7 +444,7 @@ class RavenLambdaWrapper {
 			const captureUnhandled = wrapCallback(pluginConfig, err => {
 				err._ravenHandled = true; // prevent recursion
 				throw err;
-			});
+			}, captureOptions);
 
 			const Raven = pluginConfig.ravenClient;
 			return Raven.context(ravenContext, () => {
@@ -445,7 +492,7 @@ class RavenLambdaWrapper {
 							}
 							if (ravenInstalled && err && pluginConfig.captureErrors) {
 								const Raven = pluginConfig.ravenClient;
-								return new Promise((resolve, reject) => Raven.captureException(err, {}, () => {
+								return new Promise((resolve, reject) => Raven.captureException(err, captureOptions, () => {
 									reject(err);
 								}));
 							}
@@ -460,14 +507,14 @@ class RavenLambdaWrapper {
 				}
 				catch (err) {
 					// Catch and log synchronous exceptions thrown by the handler
-					console.log("Catch and log synchronous exceptions thrown by the handler");
+					debug("Catch and log synchronous exceptions thrown by the handler");
 					captureUnhandled(err);
 				}
 			}, err => {
 				// Catch unhandled exceptions and rejections
 				if (!_.isObject(err) || err._ravenHandled) {
 					// This error is being rethrown. Pass it through...
-					console.log("This error is being rethrown. Pass it through...");
+					debug("This error is being rethrown. Pass it through...");
 					throw err;
 				}
 				else {
