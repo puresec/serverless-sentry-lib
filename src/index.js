@@ -71,7 +71,7 @@ class _ {
  */
 function debug() {
 	if (process.env.SENTRY_DEBUG) {
-		console.log(...arguments);
+		console.log("Sentry plugin debug", ...arguments);
 	}
 }
 
@@ -100,7 +100,7 @@ function parseFingeprint(fingerprint) {
 		console.log("Error, new fingerprint resolved to be empty, original is", fingerprint, "fnModule is", fnModule);
 		return;
 	}
-	
+
 	debug("sentry plugin fingerprint", newFingerprint);
 	return newFingerprint;
 }
