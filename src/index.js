@@ -291,6 +291,7 @@ function wrapCallback(pluginConfig, cb, captureOptions) {
 			}
 			else {
 				debug("exception and sentry capture turned off", err.message);
+				cb(err, data);
 			}
 		}
 		else {
