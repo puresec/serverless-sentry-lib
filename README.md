@@ -115,6 +115,8 @@ during deployment.
 | `SENTRY_CAPTURE_UNHANDLED` | Enable capture unhandled exceptions (defaults to `true`) |
 | `SENTRY_CAPTURE_MEMORY` | Enable monitoring memory usage (defaults to `true`) |
 | `SENTRY_CAPTURE_TIMEOUTS` | Enable monitoring execution timeouts (defaults to `true`) |
+| `SENTRY_DEBUG` | logs plugin debug messages (defaults to `false`) (optional)|
+| `SENTRY_MODULE` | module to use with {{module}} fingerprint grouping (optional)|
 
 In addition the library checks for the following optional variables and adds
 them as custom tags automatically:
@@ -306,6 +308,18 @@ module.exports.handler = RavenLambdaWrapper.handler(ravenConfig, (event, context
 ```
 
 ## Version History
+
+### 1.1.2
+
+* Added plugin debug messages and flag
+* Added fingerprint support with dynamic module variable. when calling the Sentry handler, a new property named fingerprint can be set on the Raven object, as detailed in the [Sentry documentation](https://docs.sentry.io/clients/node/usage/), with a module placeholder added to the default placeholder. the module placeholder will be replaced with the SENTRY_MODULE evironment variable on runtime for better Sentry issue grouping support.
+
+example:
+
+```js
+Raven.fingerprint = ["{{module}}", "{{default}}"];
+handler(Raven, handler)
+```
 
 ### 1.1.2
 
