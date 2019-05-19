@@ -271,11 +271,16 @@ function wrapCallback(pluginConfig, cb, captureOptions) {
 		clearTimers();
 
 		// If an error was thrown we'll report it to Sentry
-		if (err && pluginConfig.captureErrors) {
-			const Raven = pluginConfig.ravenClient;
-			ravenInstalled && Raven.captureException(err, captureOptions, () => {
-				cb(err, data);
-			});
+		if (err) {
+			if (pluginConfig.captureErrors) {
+				const Raven = pluginConfig.ravenClient;
+				ravenInstalled && Raven.captureException(err, captureOptions, () => {
+					cb(err, data);
+				});
+			}
+			else {
+				debug("exception and sentry capture turned off", err.message);
+			}
 		}
 		else {
 			cb(err, data);
@@ -515,7 +520,7 @@ class RavenLambdaWrapper {
 				// Catch unhandled exceptions and rejections
 				if (!_.isObject(err) || err._ravenHandled) {
 					// This error is being rethrown. Pass it through...
-					debug("This error is being rethrown. Pass it through...");
+					debug("This error is being rethrown. Pass it through. context is", Raven.getContext());
 					throw err;
 				}
 				else {
