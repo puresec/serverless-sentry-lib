@@ -69,9 +69,9 @@ class _ {
 /**
  * plugin debug function
  */
-function debug(log) {
+function debug() {
 	if (process.env.SENTRY_DEBUG) {
-		console.log(log);
+		console.log(...arguments);
 	}
 }
 
