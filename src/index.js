@@ -13,7 +13,7 @@ let ravenInstalled = false;
  * Global variable for backward compatibility with old versions of this plugin.
  *
  * This should not be used. Import Raven yourself and use the local
- * instead instead.
+ * instead.
  *
  * @type {Raven}
  *
@@ -119,7 +119,7 @@ function installRaven(pluginConfig) {
 	global.sls_raven = Raven;
 	ravenInstalled = true;
 
-	console.log("Raven installed.");
+	console.log("Raven installed - fingerprint patch.");
 }
 
 
@@ -309,7 +309,7 @@ class RavenLambdaWrapper {
 			printEventToStdout:         parseBoolean(_.get(process.env, "SENTRY_PRINT_EVENT_TO_STDOUT"), false),
 			filterEventsFields:         _.get(process.env, "SENTRY_FILTER_EVENT_FIELDS", ""),
 			ravenClient: null
-		};
+		};	
 
 		pluginConfig = _.extend(pluginConfigDefaults, pluginConfig);
 		if (!pluginConfig.ravenClient) {
@@ -318,6 +318,7 @@ class RavenLambdaWrapper {
 
 		// Install raven (if that didn't happen already during a previous Lambda invocation)
 		if (process.env.SENTRY_DSN && !ravenInstalled) {
+			console.log(pluginConfig);
 			installRaven(pluginConfig);
 		}
 
@@ -345,7 +346,7 @@ class RavenLambdaWrapper {
 			callback = originalCallbacks.callback ?
 				wrapCallback(pluginConfig, originalCallbacks.callback) : originalCallbacks.callback;
 
-			// filter out no needed fields from event
+			// filter out un-needed fields from event
 			const filterEventsFieldsArray = pluginConfig.filterEventsFields.split(",");
 			const eventForAdditionalContext = Object.assign({}, event);
 			filterEventsFieldsArray.forEach(field => {
@@ -405,7 +406,7 @@ class RavenLambdaWrapper {
 
 				// Monitor for timeouts and memory usage
 				// The timers will be removed in the wrappedCtx and wrappedCb below
-				installTimers(pluginConfig, context,event);
+				installTimers(pluginConfig, context, event);
 
 				try {
 					if (pluginConfig.autoBreadcrumbs) {
@@ -459,12 +460,14 @@ class RavenLambdaWrapper {
 				}
 				catch (err) {
 					// Catch and log synchronous exceptions thrown by the handler
+					console.log("Catch and log synchronous exceptions thrown by the handler");
 					captureUnhandled(err);
 				}
 			}, err => {
 				// Catch unhandled exceptions and rejections
 				if (!_.isObject(err) || err._ravenHandled) {
 					// This error is being rethrown. Pass it through...
+					console.log("This error is being rethrown. Pass it through...");
 					throw err;
 				}
 				else {
