@@ -284,6 +284,7 @@ function wrapCallback(pluginConfig, cb, captureOptions) {
 		if (err) {
 			if (pluginConfig.captureErrors) {
 				const Raven = pluginConfig.ravenClient;
+				debug("capturing exception with options", captureOptions);
 				ravenInstalled && Raven.captureException(err, captureOptions, () => {
 					cb(err, data);
 				});
