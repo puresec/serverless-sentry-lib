@@ -79,6 +79,7 @@ function addFingerprint(opts, fingerprint) {
 	if (fingerprint) {
 		opts.fingerprint = fingerprint;
 	}
+	return opts;
 }
 
 function parseFingeprint(fingerprint) {
