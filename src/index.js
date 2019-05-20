@@ -75,36 +75,6 @@ function debug() {
 	}
 }
 
-function addFingerprint(opts, fingerprint) {
-	if (fingerprint) {
-		opts.fingerprint = fingerprint;
-	}
-	return opts;
-}
-
-function parseFingeprint(fingerprint) {
-	if (! Array.isArray(fingerprint)) {
-		console.log("Error, invalid plugin fingerprint, must be an Array", fingerprint);
-		return;
-	}
-	const newFingerprint = [];
-	const fnModule = process.env.SENTRY_MODULE || "";
-	fingerprint.forEach((issueGroup) => {
-		const newIssueGroup = issueGroup.replace("{{module}}", fnModule);
-		if (newIssueGroup) {
-			newFingerprint.push(newIssueGroup);
-		}
-	});
-
-	if (newFingerprint.length == 0) {
-		console.log("Error, new fingerprint resolved to be empty, original is", fingerprint, "fnModule is", fnModule);
-		return;
-	}
-
-	debug("sentry plugin fingerprint", newFingerprint);
-	return newFingerprint;
-}
-
 /**
  * 
  * @param {*} pluginConfig 
@@ -163,7 +133,7 @@ function installRaven(pluginConfig) {
 	global.sls_raven = Raven;
 	ravenInstalled = true;
 
-	console.log("Raven installed - fingerprint patch.");
+	console.log("Raven installed" + (process.env.SENTRY_DEBUG ? ", debug mode" : ""));
 }
 
 
@@ -177,7 +147,7 @@ let memoryWatch, timeoutWarning, timeoutError;
  * @param {Object} lambdaContext
  * @param {Object} event
  */
-function installTimers(pluginConfig, lambdaContext, event, fingerprint) {
+function installTimers(pluginConfig, lambdaContext, event) {
 	const timeRemaining = lambdaContext.getRemainingTimeInMillis();
 	const memoryLimit = lambdaContext.memoryLimitInMB;
 
@@ -186,12 +156,12 @@ function installTimers(pluginConfig, lambdaContext, event, fingerprint) {
 		if (pluginConfig.printEventToStdout) {
 			console.log("Processing event for timeout warning:", event);
 		}
-		ravenInstalled && Raven.captureMessage("Function Execution Time Warning", addFingerprint({
+		ravenInstalled && Raven.captureMessage("Function Execution Time Warning", {
 			level: "warning",
 			extra: {
 				TimeRemainingInMsec: lambdaContext.getRemainingTimeInMillis()
 			}
-		}, fingerprint), cb);
+		}, cb);
 	}
 
 	function timeoutErrorFunc(cb) {
@@ -199,12 +169,12 @@ function installTimers(pluginConfig, lambdaContext, event, fingerprint) {
 		if (pluginConfig.printEventToStdout) {
 			console.log("Processing event for timeout error:", event);
 		}
-		ravenInstalled && Raven.captureMessage("Function Timed Out", addFingerprint({
+		ravenInstalled && Raven.captureMessage("Function Timed Out", {
 			level: "error",
 			extra: {
 				TimeRemainingInMsec: lambdaContext.getRemainingTimeInMillis()
 			}
-		}, fingerprint), cb);
+		}, cb);
 	}
 
 	function memoryWatchFunc(cb) {
@@ -215,13 +185,13 @@ function installTimers(pluginConfig, lambdaContext, event, fingerprint) {
 				console.log("Processing event for memory error:", event);
 			}
 			const Raven = pluginConfig.ravenClient;
-			ravenInstalled && Raven.captureMessage("Low Memory Warning", addFingerprint({
+			ravenInstalled && Raven.captureMessage("Low Memory Warning", {
 				level: "warning",
 				extra: {
 					MemoryLimitInMB: memoryLimit,
 					MemoryUsedInMB: Math.floor(used)
 				}
-			}, fingerprint), cb);
+			}, cb);
 
 			if (memoryWatch) {
 				clearTimeout(memoryWatch);
@@ -275,7 +245,7 @@ function clearTimers() {
  * @param {Function} cb - Callback function to wrap
  * @returns {Function}
  */
-function wrapCallback(pluginConfig, cb, captureOptions) {
+function wrapCallback(pluginConfig, cb) {
 	return (err, data) => {
 		// Stop watchdog timers
 		clearTimers();
@@ -284,8 +254,8 @@ function wrapCallback(pluginConfig, cb, captureOptions) {
 		if (err) {
 			if (pluginConfig.captureErrors) {
 				const Raven = pluginConfig.ravenClient;
-				debug("capturing exception with options", captureOptions);
-				ravenInstalled && Raven.captureException(err, captureOptions, () => {
+				debug("capturing exception with options");
+				ravenInstalled && Raven.captureException(err, {}, () => {
 					cb(err, data);
 				});
 			}
@@ -338,7 +308,6 @@ class RavenLambdaWrapper {
 	 * @param {boolean} [pluginConfig.captureTimeoutErrors] - monitor execution timeouts errors (defaults to `true`)
  	 * @param {boolean} [pluginConfig.printEventToStdout] - print the event with console log (defaults to `false`)
 	 * @param {boolean} [pluginConfig.filterEventsFields] - filter out list of fields from the event data (defaults to ''.Example for not empty:'body,headers')
-	 * @param {boolean} [pluginConfig.fingerprint] - fingerprint template for issues
 	 * @param {Function} handler - Original Lambda function handler
 	 * @return {Function} - Wrapped Lambda function handler with Sentry instrumentation
 	 */
@@ -368,16 +337,6 @@ class RavenLambdaWrapper {
 			pluginConfig.ravenClient = require("raven");
 		}
 
-		const captureOptions = {};
-		if (pluginConfig.fingerprint) {
-			debug("parsing Sentry fingerprint");
-			const parsedFingerprint = parseFingeprint(pluginConfig.fingerprint);
-			if (parsedFingerprint) {
-				captureOptions.fingerprint = parsedFingerprint;
-				pluginConfig.fingerprint = parsedFingerprint;
-			}
-		}
-
 		// Install raven (if that didn't happen already during a previous Lambda invocation)
 		if (process.env.SENTRY_DSN && !ravenInstalled) {
 			debug("installing raven plugin with config", pluginConfig);
@@ -400,13 +359,13 @@ class RavenLambdaWrapper {
 				callback: callback,
 			};
 			context.done = _.isFunction(originalCallbacks.done) ?
-				wrapCallback(pluginConfig, originalCallbacks.done, captureOptions) : originalCallbacks.done;
+				wrapCallback(pluginConfig, originalCallbacks.done) : originalCallbacks.done;
 			context.fail = _.isFunction(originalCallbacks.fail) ?
-				wrapCallback(pluginConfig, originalCallbacks.fail, captureOptions) : originalCallbacks.fail;
+				wrapCallback(pluginConfig, originalCallbacks.fail) : originalCallbacks.fail;
 			context.succeed = _.isFunction(originalCallbacks.succeed) ?
-				wrapCallback(pluginConfig, (err, result) => originalCallbacks.succeed(result), captureOptions).bind(null, null) : originalCallbacks.succeed;
+				wrapCallback(pluginConfig, (err, result) => originalCallbacks.succeed(result)).bind(null, null) : originalCallbacks.succeed;
 			callback = originalCallbacks.callback ?
-				wrapCallback(pluginConfig, originalCallbacks.callback, captureOptions) : originalCallbacks.callback;
+				wrapCallback(pluginConfig, originalCallbacks.callback) : originalCallbacks.callback;
 
 			// filter out un-needed fields from event
 			const filterEventsFieldsArray = pluginConfig.filterEventsFields.split(",");
@@ -425,10 +384,6 @@ class RavenLambdaWrapper {
 				},
 				tags: {}
 			};
-
-			if (pluginConfig.fingerprint) {
-				ravenContext.fingerprint = pluginConfig.fingerprint;
-			}
 
 			// Depending on the endpoint type the identity information can be at
 			// event.requestContext.identity (AWS_PROXY) or at context.identity (AWS)
@@ -463,7 +418,7 @@ class RavenLambdaWrapper {
 			const captureUnhandled = wrapCallback(pluginConfig, err => {
 				err._ravenHandled = true; // prevent recursion
 				throw err;
-			}, captureOptions);
+			});
 
 			const Raven = pluginConfig.ravenClient;
 			return Raven.context(ravenContext, () => {
@@ -512,8 +467,8 @@ class RavenLambdaWrapper {
 							}
 							if (ravenInstalled && err && pluginConfig.captureErrors) {
 								const Raven = pluginConfig.ravenClient;
-								debug("capturing exception with options", captureOptions);
-								return new Promise((resolve, reject) => Raven.captureException(err, captureOptions, () => {
+								debug("capturing exception with options");
+								return new Promise((resolve, reject) => Raven.captureException(err, {}, () => {
 									reject(err);
 								}));
 							}
