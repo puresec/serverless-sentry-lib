@@ -249,23 +249,24 @@ function wrapCallback(pluginConfig, cb) {
 	return (err, data) => {
 		// Stop watchdog timers
 		clearTimers();
-
+		const throwOut = pluginConfig.throwOut ? err : null;
 		// If an error was thrown we'll report it to Sentry
 		if (err) {
 			if (pluginConfig.captureErrors) {
 				const Raven = pluginConfig.ravenClient;
-				debug("capturing exception with options");
-				ravenInstalled && Raven.captureException(err, {}, () => {
-					cb(err, data);
+				const captureOptions = {};
+				debug("capturing exception with options", captureOptions);
+				ravenInstalled && Raven.captureException(err, captureOptions, () => {
+					cb(throwOut, data);
 				});
 			}
 			else {
 				debug("exception and sentry capture turned off", err.message);
-				cb(err, data);
+				cb(throwOut, data);
 			}
 		}
 		else {
-			cb(err, data);
+			cb(throwOut, data);
 		}
 	};
 }
@@ -279,10 +280,10 @@ function wrapCallback(pluginConfig, cb) {
  */
 function parseBoolean(value, defaultValue) {
 	const v = String(value).trim().toLowerCase();
-	if ([ "true", "t", "1", "yes", "y" ].includes(v)) {
+	if (["true", "t", "1", "yes", "y"].includes(v)) {
 		return true;
 	}
-	else if ([ "false", "f", "0", "no", "n" ].includes(v)) {
+	else if (["false", "f", "0", "no", "n"].includes(v)) {
 		return false;
 	}
 	else {
@@ -320,18 +321,19 @@ class RavenLambdaWrapper {
 		}
 
 		const pluginConfigDefaults = {
-			autoBreadcrumbs:            parseBoolean(_.get(process.env, "SENTRY_AUTO_BREADCRUMBS"),  true),
-			filterLocal:                parseBoolean(_.get(process.env, "SENTRY_FILTER_LOCAL"),      true),
-			captureErrors:              parseBoolean(_.get(process.env, "SENTRY_CAPTURE_ERRORS"),    true),
+			autoBreadcrumbs: parseBoolean(_.get(process.env, "SENTRY_AUTO_BREADCRUMBS"), true),
+			filterLocal: parseBoolean(_.get(process.env, "SENTRY_FILTER_LOCAL"), true),
+			captureErrors: parseBoolean(_.get(process.env, "SENTRY_CAPTURE_ERRORS"), true),
 			captureUnhandledRejections: parseBoolean(_.get(process.env, "SENTRY_CAPTURE_UNHANDLED"), true),
-			captureMemoryWarnings:      parseBoolean(_.get(process.env, "SENTRY_CAPTURE_MEMORY"),    true),
-			captureTimeoutWarnings:     parseBoolean(_.get(process.env, "SENTRY_CAPTURE_TIMEOUTS"),  true),
-			captureTimeoutErrors:       parseBoolean(_.get(process.env, "SENTRY_CAPTURE_TIMEOUTS_ERRORS"),  true),
-			printEventToStdout:         parseBoolean(_.get(process.env, "SENTRY_PRINT_EVENT_TO_STDOUT"), false),
-			filterEventsFields:         _.get(process.env, "SENTRY_FILTER_EVENT_FIELDS", ""),
+			captureMemoryWarnings: parseBoolean(_.get(process.env, "SENTRY_CAPTURE_MEMORY"), true),
+			captureTimeoutWarnings: parseBoolean(_.get(process.env, "SENTRY_CAPTURE_TIMEOUTS"), true),
+			captureTimeoutErrors: parseBoolean(_.get(process.env, "SENTRY_CAPTURE_TIMEOUTS_ERRORS"), true),
+			printEventToStdout: parseBoolean(_.get(process.env, "SENTRY_PRINT_EVENT_TO_STDOUT"), false),
+			filterEventsFields: _.get(process.env, "SENTRY_FILTER_EVENT_FIELDS", ""),
 			ravenClient: null
-		};	
+		};
 
+		const throwOut = pluginConfig.throwOut;
 		pluginConfig = _.extend(pluginConfigDefaults, pluginConfig);
 		if (!pluginConfig.ravenClient) {
 			pluginConfig.ravenClient = require("raven");
@@ -346,7 +348,6 @@ class RavenLambdaWrapper {
 		// Create a new handler function wrapping the original one and hooking
 		// into all callbacks
 		return (event, context, callback) => {
-
 			if (!ravenInstalled) {
 				// Directly invoke the original handler
 				return handler(event, context, callback);
@@ -456,28 +457,33 @@ class RavenLambdaWrapper {
 						// don't forget to stop timers
 						debug("sentry wrapping async handler");
 						return promise
-						.then((...data) => {
-							clearTimers();
-							return Promise.resolve(...data);
-						})
-						.catch(err => {
-							clearTimers();
-							if (pluginConfig.printEventToStdout) {
-								console.log("Processing event error exception:", event);
-							}
-							if (ravenInstalled && err && pluginConfig.captureErrors) {
-								const Raven = pluginConfig.ravenClient;
-								return new Promise((resolve, reject) => {
-									debug("capturing exception from promise");
-									Raven.captureException(err, {}, () => {
-										reject(err);
+							.then((...data) => {
+								clearTimers();
+								return Promise.resolve(...data);
+							})
+							.catch(err => {
+								clearTimers();
+								if (pluginConfig.printEventToStdout) {
+									console.log("Processing event error exception:", event);
+								}
+								if (ravenInstalled && err && pluginConfig.captureErrors) {
+									const Raven = pluginConfig.ravenClient;
+									return new Promise((resolve, reject) => {
+										debug("capturing exception from promise");
+										Raven.captureException(err, {}, () => {
+											if (throwOut) {
+												reject(err);
+											} else {
+												resolve();
+											}
+
+										});
 									});
-								});
-							}
-							else {
-								return Promise.reject(err);
-							}
-						});
+								}
+								else {
+									return throwOut ? Promise.reject(err) : Promise.resolve(true);
+								}
+							});
 					}
 					// Returning non-Promise values would be meaningless for lambda.
 					// But inherit the behavior of the original handler.
