@@ -471,12 +471,7 @@ class RavenLambdaWrapper {
 									return new Promise((resolve, reject) => {
 										debug("capturing exception from promise");
 										Raven.captureException(err, {}, () => {
-											if (throwOut) {
-												reject(err);
-											} else {
-												resolve();
-											}
-
+											return throwOut ? reject(err) : resolve();
 										});
 									});
 								}
