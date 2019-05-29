@@ -141,6 +141,15 @@ necessary to ensure that the wrapper uses the same environment as the rest
 of your code. In the rare circumstances that this isn't desired, you can
 pass in `null` instead.
 
+If you want the handler to NOT return an error to the AWS lambda after the error was captured and processed to Sentry, pass throwOut false to the handler creation method.
+```js
+pluginConfig = {
+  ...
+  throwOut: false
+  ...
+}
+```
+
 **ES2015: Original Lambda Handler Code Before Adding RavenLambdaWrapper**:
 ```js
 "use strict";
@@ -311,7 +320,7 @@ module.exports.handler = RavenLambdaWrapper.handler(ravenConfig, (event, context
 ### 1.1.2
 
 * Added plugin debug messages and flag
-* add plugin config to static handler to not throw error after capturing. pass throwOut: false parameter to the handler plugin config 
+* Add throwOut prpoerty to plugin config of handler creation method, enabling not returning error after capturing.
 
 ### 1.1.2
 
