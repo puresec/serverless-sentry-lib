@@ -311,7 +311,7 @@ module.exports.handler = RavenLambdaWrapper.handler(ravenConfig, (event, context
 ### 1.1.2
 
 * Added plugin debug messages and flag
-* add plugin config to static handler to not throw error after capturing.
+* add plugin config to static handler to not throw error after capturing. pass throwOut: false parameter to the handler plugin config 
 
 ### 1.1.2
 

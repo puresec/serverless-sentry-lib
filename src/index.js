@@ -309,6 +309,7 @@ class RavenLambdaWrapper {
 	 * @param {boolean} [pluginConfig.captureTimeoutErrors] - monitor execution timeouts errors (defaults to `true`)
  	 * @param {boolean} [pluginConfig.printEventToStdout] - print the event with console log (defaults to `false`)
 	 * @param {boolean} [pluginConfig.filterEventsFields] - filter out list of fields from the event data (defaults to ''.Example for not empty:'body,headers')
+	 * @param {boolean} [pluginConfig.throwOut] - throw out the error after capturing it. (defaults to `true`)
 	 * @param {Function} handler - Original Lambda function handler
 	 * @return {Function} - Wrapped Lambda function handler with Sentry instrumentation
 	 */
@@ -330,10 +331,10 @@ class RavenLambdaWrapper {
 			captureTimeoutErrors: parseBoolean(_.get(process.env, "SENTRY_CAPTURE_TIMEOUTS_ERRORS"), true),
 			printEventToStdout: parseBoolean(_.get(process.env, "SENTRY_PRINT_EVENT_TO_STDOUT"), false),
 			filterEventsFields: _.get(process.env, "SENTRY_FILTER_EVENT_FIELDS", ""),
-			ravenClient: null
+			ravenClient: null,
+			throwOut: true
 		};
 
-		const throwOut = pluginConfig.throwOut;
 		pluginConfig = _.extend(pluginConfigDefaults, pluginConfig);
 		if (!pluginConfig.ravenClient) {
 			pluginConfig.ravenClient = require("raven");
@@ -471,12 +472,12 @@ class RavenLambdaWrapper {
 									return new Promise((resolve, reject) => {
 										debug("capturing exception from promise");
 										Raven.captureException(err, {}, () => {
-											return throwOut ? reject(err) : resolve();
+											return pluginConfig.throwOut ? reject(err) : resolve();
 										});
 									});
 								}
 								else {
-									return throwOut ? Promise.reject(err) : Promise.resolve(true);
+									return pluginConfig.throwOut ? Promise.reject(err) : Promise.resolve(true);
 								}
 							});
 					}
