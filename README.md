@@ -317,6 +317,10 @@ module.exports.handler = RavenLambdaWrapper.handler(ravenConfig, (event, context
 
 ## Version History
 
+### 1.1.3
+log to console errors that are not thrown out
+
+
 ### 1.1.2
 
 * Added plugin debug messages and flag
