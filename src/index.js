@@ -313,7 +313,6 @@ class RavenLambdaWrapper {
 	 * @param {boolean} [pluginConfig.captureTimeoutErrors] - monitor execution timeouts errors (defaults to `true`)
  	 * @param {boolean} [pluginConfig.printEventToStdout] - print the event with console log (defaults to `false`)
 	 * @param {boolean} [pluginConfig.filterEventsFields] - filter out list of fields from the event data (defaults to ''.Example for not empty:'body,headers')
-	 * @param {Array} [pluginConfig.fingerPrint] - throw out the error after capturing it. (defaults to `[{{defualt}}]`)
 	 * @param {boolean} [pluginConfig.throwOut] - throw out the error after capturing it. (defaults to `true`)
 	 * @param {Function} handler - Original Lambda function handler
 	 * @return {Function} - Wrapped Lambda function handler with Sentry instrumentation
